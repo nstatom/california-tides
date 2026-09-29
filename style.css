@@ -29,7 +29,7 @@ select,input[type=date] { height:38px; border:1px solid #cbd4da; border-radius:6
 .section-heading { padding:15px 18px 0; }
 .section-heading h2 { margin:0; font-size:1.05rem; font-weight:650; }
 .section-heading p { margin:3px 0 0; color:var(--muted); font-size:.82rem; }
-.plot { width:100%; min-height:400px; }
+.plot { width:100%; min-height:400px; border:1px solid #b8c2c9; border-radius:4px; overflow:hidden; }
 #predictionPlot { min-height:500px; }
 footer { width:min(1280px,calc(100% - 28px)); margin:0 auto 25px; color:var(--muted); font-size:.75rem; display:flex; justify-content:center; gap:7px; flex-wrap:wrap; }
 @media (max-width:700px) { .site-header{padding:18px;align-items:flex-start;flex-direction:column;} main{width:calc(100% - 18px);margin-top:9px;} .card{border-radius:7px;} .plot{min-height:350px;} #predictionPlot{min-height:430px;} select,input[type=date]{width:100%;} .control-row label,.unit-control{width:100%;} .primary{width:100%;} }
