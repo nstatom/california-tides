@@ -1,4 +1,4 @@
-# California Tides v1.3
+# California Tides v1.1
 
 Static GitHub Pages site for NOAA CO-OPS tide predictions and observations at nine California stations.
 
@@ -7,11 +7,11 @@ Static GitHub Pages site for NOAA CO-OPS tide predictions and observations at ni
 - La Jolla — 9410230
 - Los Angeles — 9410660
 - Santa Barbara — 9411340
-- San Luis — 9412110
+- Port San Luis — 9412110
 - Monterey — 9413450
 - San Francisco — 9414290
-- Point Arena — 9416841
-- Humboldt — 9418767
+- Point Arena Cove — 9416841
+- Humboldt Bay — 9418767
 - Crescent City — 9419750
 
 Santa Monica and Point Reyes were removed from the first version.
