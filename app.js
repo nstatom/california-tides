@@ -94,7 +94,7 @@ function tickSpec(xs){
   return vals.length?{tickmode:"array",tickvals:vals,ticktext:vals.map(tickText)}:{};
 }
 function recordsToXY(data,valueKey="v"){return(data||[]).map(r=>({x:parseNoaaTime(r.t),y:Number(r[valueKey])})).filter(r=>r.x&&!Number.isNaN(r.y));}
-function baseLayout(yTitle,extra={}){return{margin:{l:64,r:24,t:8,b:58},paper_bgcolor:"white",plot_bgcolor:"white",font:{family:"system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",size:12,color:"#26343f"},hovermode:"x unified",showlegend:true,legend:{orientation:"h",y:-.18,x:0,bgcolor:"rgba(255,255,255,.8)"},xaxis:{showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:true,linecolor:"#b8c2c9",linewidth:1,mirror:true,...extra.xaxis},yaxis:{title:yTitle,showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:true,linecolor:"#b8c2c9",linewidth:1,mirror:true},...extra};}
+function baseLayout(yTitle,extra={}){return{margin:{l:64,r:24,t:8,b:58},paper_bgcolor:"white",plot_bgcolor:"white",font:{family:"system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",size:12,color:"#26343f"},hovermode:"x unified",showlegend:true,legend:{orientation:"h",y:-.18,x:0,bgcolor:"rgba(255,255,255,.8)"},xaxis:{showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false,...extra.xaxis},yaxis:{title:yTitle,showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false},...extra};}
 function plotConfig(){return{responsive:true,displaylogo:false,modeBarButtonsToRemove:["lasso2d","select2d","autoScale2d"]};}
 
 async function loadPredictions(){
@@ -109,25 +109,37 @@ async function loadPredictions(){
     setStatus(`Predictions loaded for ${start} through ${end}. Observations loaded for the last 72 hours.`);
   }catch(e){console.error(e);setStatus(`Unable to load predictions: ${e.message}`,true);}
 }
-function setObservationSubtitles(){const n=STATIONS.find(s=>s.id===selectedStation)?.name||"Selected station";["waterLevelSubtitle","windSubtitle","airTempSubtitle","waterTempSubtitle","pressureSubtitle"].forEach(id=>{const el=$(id);if(el)el.textContent=`${n} · previous 72 hours of observations`;});}
-function clearObservationPlots(){
-  const unitsMap={waterLevelPlot:units==="english"?"ft MLLW":"m MLLW",windPlot:units==="english"?"knots":"m/s",airTempPlot:units==="english"?"°F":"°C",waterTempPlot:units==="english"?"°F":"°C",pressurePlot:units==="english"?"in Hg":"hPa"};
-  Object.entries(unitsMap).forEach(([id,u])=>drawNoData(id,u));
+function setObservationSubtitles(){
+  const n=STATIONS.find(s=>s.id===selectedStation)?.name||"Selected station";
+  ["waterLevelSubtitle","waterTempSubtitle","salinitySubtitle","windSubtitle","airTempSubtitle","visibilitySubtitle"].forEach(id=>{
+    const el=$(id); if(el)el.textContent=`${n} · previous 72 hours of observations`;
+  });
 }
-function drawNoData(element,yUnit){
-  Plotly.react(element,[],baseLayout(yUnit,{height:400,showlegend:false,annotations:[{text:"No Data",xref:"paper",yref:"paper",x:0.5,y:0.5,showarrow:false,font:{size:16,color:"#687783"}}]}),plotConfig());
+function setCardVisible(id,visible){
+  const el=$(id); if(el)el.style.display=visible?"":"none";
+}
+function clearObservationPlots(){
+  [
+    ["waterLevelCard","waterLevelPlot"],["waterTempCard","waterTempPlot"],
+    ["salinityCard","salinityPlot"],["windCard","windPlot"],
+    ["airTempCard","airTempPlot"],["visibilityCard","visibilityPlot"]
+  ].forEach(([card,plot])=>{setCardVisible(card,false);const el=$(plot);if(el)Plotly.purge(el);});
 }
 async function loadObservations(){
-  const station=STATIONS.find(s=>s.id===selectedStation);setObservationSubtitles();setStatus(`Loading the last 72 hours for ${station.name}…`);
-  // Clear immediately so a failed request can never leave the previous station's data visible.
+  const station=STATIONS.find(s=>s.id===selectedStation);
+  setObservationSubtitles();
+  setStatus(`Loading the last 72 hours for ${station.name}…`);
   clearObservationPlots();
   const common={date:"recent",station:selectedStation,units};
   const products=[
     ["water_level",{product:"water_level",datum:"MLLW"}],
+    ["water_temperature",{product:"water_temperature"}],
+    ["salinity",{product:"salinity"}],
+    ["conductivity",{product:"conductivity"}],
     ["wind",{product:"wind"}],
     ["air_temperature",{product:"air_temperature"}],
-    ["water_temperature",{product:"water_temperature"}],
-    ["air_pressure",{product:"air_pressure"}]
+    ["humidity",{product:"humidity"}],
+    ["visibility",{product:"visibility"}]
   ];
   const responses={};
   const failures=[];
@@ -137,20 +149,103 @@ async function loadObservations(){
     try{responses[name]=await apiRequest({...common,...extra});}
     catch(e){console.warn(`${name} unavailable for ${station.name}:`,e.message);responses[name]={};failures.push(name);}
   }
-  drawWaterLevel(responses.water_level.data||[]);
-  drawWind(responses.wind.data||[]);
-  drawSingleSeries("airTempPlot",responses.air_temperature.data||[],"Air temperature",units==="english"?"°F":"°C");
-  drawSingleSeries("waterTempPlot",responses.water_temperature.data||[],"Water temperature",units==="english"?"°F":"°C");
-  drawSingleSeries("pressurePlot",responses.air_pressure.data||[],"Atmospheric pressure",units==="english"?"in Hg":"hPa");
-  if(failures.length){
-    setStatus(`Observations loaded for ${station.name}; some products have no data.`);
+  const results=[
+    drawWaterLevel(responses.water_level.data||[]),
+    drawSingleSeries("waterTempPlot","waterTempCard",responses.water_temperature.data||[],"Water temperature",units==="english"?"°F":"°C"),
+    drawSalinityConductivity(responses.salinity.data||[],responses.conductivity.data||[]),
+    drawWind(responses.wind.data||[]),
+    drawAirTempHumidity(responses.air_temperature.data||[],responses.humidity.data||[]),
+    drawSingleSeries("visibilityPlot","visibilityCard",responses.visibility.data||[],"Visibility",units==="english"?"nm":"km")
+  ];
+  const missing=results.filter(x=>!x).length;
+  if(failures.length||missing){
+    setStatus(`Observations loaded for ${station.name}; some observations are unavailable.`);
   }else{
     setStatus(`Observations loaded for ${station.name}.`);
   }
 }
-function drawWaterLevel(data){const xy=recordsToXY(data);if(!xy.length){drawNoData("waterLevelPlot",units==="english"?"ft MLLW":"m MLLW");return;}Plotly.react("waterLevelPlot",[{x:xy.map(p=>p.x),y:xy.map(p=>p.y),mode:"lines",name:"Water level",line:{color:"#1261a0",width:1.8},customdata:xy.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} ${units==="english"?"ft MLLW":"m MLLW"}<extra></extra>`}],baseLayout(units==="english"?"ft MLLW":"m MLLW",{height:400,showlegend:false,xaxis:tickSpec(xy.map(p=>p.x))}),plotConfig());}
-function drawWind(data){const speed=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.s)})).filter(p=>p.x&&!Number.isNaN(p.y));const gust=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.g)})).filter(p=>p.x&&!Number.isNaN(p.y));const direction=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.d)})).filter(p=>p.x&&!Number.isNaN(p.y));if(!speed.length&&!gust.length&&!direction.length){drawNoData("windPlot",units==="english"?"knots":"m/s");return;}const unit=units==="english"?"knots":"m/s";Plotly.react("windPlot",[{x:speed.map(p=>p.x),y:speed.map(p=>p.y),mode:"lines",name:"Speed",line:{color:"#1261a0",width:1.8},customdata:speed.map(p=>displayHoverTime(p.x)),hovertemplate:`Speed: %{y:.1f} ${unit}<extra></extra>`},{x:gust.map(p=>p.x),y:gust.map(p=>p.y),mode:"lines",name:"Gust",line:{color:"#c65d2e",width:1.1,dash:"dot"},customdata:gust.map(p=>displayHoverTime(p.x)),hovertemplate:`Gust: %{y:.1f} ${unit}<extra></extra>`},{x:direction.map(p=>p.x),y:direction.map(p=>p.y),mode:"markers",name:"Direction",marker:{size:5,opacity:.75},yaxis:"y2",customdata:direction.map(p=>displayHoverTime(p.x)),hovertemplate:"Direction: %{y:.0f}°<extra></extra>"}],baseLayout(unit,{height:400,margin:{l:64,r:100,t:8,b:58},xaxis:tickSpec(speed.map(p=>p.x)),yaxis:{title:unit,showgrid:true,gridcolor:"#e8edf0",zeroline:false},yaxis2:{title:{text:"Direction (°)",standoff:18},overlaying:"y",side:"right",range:[0,360],dtick:90,showgrid:false}}),plotConfig());}
-function drawSingleSeries(element,data,name,yUnit){const xy=recordsToXY(data);if(!xy.length){drawNoData(element,yUnit);return;}Plotly.react(element,[{x:xy.map(p=>p.x),y:xy.map(p=>p.y),mode:"lines",name,line:{color:"#1261a0",width:1.8},customdata:xy.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} ${yUnit}<extra></extra>`}],baseLayout(yUnit,{height:400,showlegend:false,xaxis:tickSpec(xy.map(p=>p.x))}),plotConfig());}
+function drawWaterLevel(data){
+  const xy=recordsToXY(data);
+  if(!xy.length){setCardVisible("waterLevelCard",false);return false;}
+  setCardVisible("waterLevelCard",true);
+  const unit=units==="english"?"ft MLLW":"m MLLW";
+  Plotly.react("waterLevelPlot",[{x:xy.map(p=>p.x),y:xy.map(p=>p.y),mode:"lines",name:"Water level",line:{color:"#1261a0",width:1.8},customdata:xy.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} ${unit}<extra></extra>`}],baseLayout(unit,{height:400,showlegend:false,xaxis:tickSpec(xy.map(p=>p.x))}),plotConfig());
+  return true;
+}
+function drawWind(data){
+  const speed=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.s)})).filter(p=>p.x&&!Number.isNaN(p.y));
+  const gust=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.g)})).filter(p=>p.x&&!Number.isNaN(p.y));
+  const direction=data.map(r=>({x:parseNoaaTime(r.t),y:Number(r.d)})).filter(p=>p.x&&!Number.isNaN(p.y));
+  if(!speed.length&&!gust.length&&!direction.length){setCardVisible("windCard",false);return false;}
+  setCardVisible("windCard",true);
+  const unit=units==="english"?"knots":"m/s";
+  const xAll=[...speed,...gust,...direction].map(p=>p.x);
+  const traces=[];
+  if(speed.length)traces.push({x:speed.map(p=>p.x),y:speed.map(p=>p.y),mode:"lines",name:"Speed",line:{color:"#1261a0",width:1.8},customdata:speed.map(p=>displayHoverTime(p.x)),hovertemplate:`Speed: %{y:.1f} ${unit}<extra></extra>`});
+  if(gust.length)traces.push({x:gust.map(p=>p.x),y:gust.map(p=>p.y),mode:"lines",name:"Gust",line:{color:"#c65d2e",width:1.1,dash:"dot"},customdata:gust.map(p=>displayHoverTime(p.x)),hovertemplate:`Gust: %{y:.1f} ${unit}<extra></extra>`});
+  const hasDirection=direction.length;
+  if(hasDirection)traces.push({x:direction.map(p=>p.x),y:direction.map(p=>p.y),mode:"markers",name:"Direction",marker:{size:5,opacity:.75},yaxis:"y2",customdata:direction.map(p=>displayHoverTime(p.x)),hovertemplate:"Direction: %{y:.0f}°<extra></extra>"});
+  const extra={height:400,margin:{l:64,r:hasDirection?100:24,t:8,b:58},xaxis:tickSpec(xAll)};
+  if(hasDirection){extra.yaxis2={title:{text:"Direction (°)",standoff:18},overlaying:"y",side:"right",range:[0,360],dtick:90,showgrid:false,showline:false,mirror:false};}
+  Plotly.react("windPlot",traces,baseLayout(speed.length||gust.length?unit:null,extra),plotConfig());
+  return true;
+}
+function drawSingleSeries(element,card,data,name,yUnit){
+  const xy=recordsToXY(data);
+  if(!xy.length){setCardVisible(card,false);return false;}
+  setCardVisible(card,true);
+  Plotly.react(element,[{x:xy.map(p=>p.x),y:xy.map(p=>p.y),mode:"lines",name,line:{color:"#1261a0",width:1.8},customdata:xy.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} ${yUnit}<extra></extra>`}],baseLayout(yUnit,{height:400,showlegend:false,xaxis:tickSpec(xy.map(p=>p.x))}),plotConfig());
+  return true;
+}
+function drawSalinityConductivity(salinityData,conductivityData){
+  const sal=recordsToXY(salinityData);
+  const cond=recordsToXY(conductivityData);
+  if(!sal.length&&!cond.length){setCardVisible("salinityCard",false);return false;}
+  setCardVisible("salinityCard",true);
+  const traces=[];
+  if(sal.length)traces.push({x:sal.map(p=>p.x),y:sal.map(p=>p.y),mode:"lines",name:"Salinity",line:{color:"#1261a0",width:1.8},customdata:sal.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} PSU<extra></extra>`});
+  if(cond.length)traces.push({x:cond.map(p=>p.x),y:cond.map(p=>p.y),mode:"lines",name:"Conductivity",line:{color:"#c65d2e",width:1.8},yaxis:"y2",customdata:cond.map(p=>displayHoverTime(p.x)),hovertemplate:`%{y:.2f} mS/cm<extra></extra>`});
+  const both=sal.length&&cond.length;
+  const xAll=[...sal,...cond].map(p=>p.x);
+  const extra={height:400,margin:{l:72,r:both?90:24,t:8,b:58},xaxis:tickSpec(xAll)};
+  if(both){
+    traces[1].yaxis="y2";
+    extra.yaxis={title:"Salinity (PSU)",showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+    extra.yaxis2={title:{text:"Conductivity (mS/cm)",standoff:18},overlaying:"y",side:"right",showgrid:false,showline:false,mirror:false};
+  }else if(sal.length){
+    extra.yaxis={title:"Salinity (PSU)",showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+  }else{
+    delete traces[0].yaxis;
+    extra.yaxis={title:"Conductivity (mS/cm)",showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+  }
+  Plotly.react("salinityPlot",traces,baseLayout(both||sal.length?"Salinity (PSU)":"Conductivity (mS/cm)",extra),plotConfig());
+  return true;
+}
+function drawAirTempHumidity(tempData,humidityData){
+  const temp=recordsToXY(tempData);
+  const humidity=recordsToXY(humidityData);
+  if(!temp.length&&!humidity.length){setCardVisible("airTempCard",false);return false;}
+  setCardVisible("airTempCard",true);
+  const tempUnit=units==="english"?"°F":"°C";
+  const traces=[];
+  if(temp.length)traces.push({x:temp.map(p=>p.x),y:temp.map(p=>p.y),mode:"lines",name:"Air temperature",line:{color:"#1261a0",width:1.8},customdata:temp.map(p=>displayHoverTime(p.x)),hovertemplate:`Air temperature: %{y:.2f} ${tempUnit}<extra></extra>`});
+  if(humidity.length)traces.push({x:humidity.map(p=>p.x),y:humidity.map(p=>p.y),mode:"lines",name:"Humidity",line:{color:"#c65d2e",width:1.8},yaxis:"y2",customdata:humidity.map(p=>displayHoverTime(p.x)),hovertemplate:"Humidity: %{y:.1f} %<extra></extra>"});
+  const both=temp.length&&humidity.length;
+  const xAll=[...temp,...humidity].map(p=>p.x);
+  const extra={height:400,margin:{l:64,r:both?90:24,t:8,b:58},xaxis:tickSpec(xAll)};
+  if(both){
+    traces[1].yaxis="y2";
+    extra.yaxis={title:`Air temperature (${tempUnit})`,showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+    extra.yaxis2={title:{text:"Humidity (%)",standoff:18},overlaying:"y",side:"right",showgrid:false,showline:false,mirror:false};
+  }else if(temp.length){
+    extra.yaxis={title:`Air temperature (${tempUnit})`,showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+  }else{
+    delete traces[0].yaxis;
+    extra.yaxis={title:"Humidity (%)",showgrid:true,gridcolor:"#e8edf0",zeroline:false,showline:false,mirror:false};
+  }
+  Plotly.react("airTempPlot",traces,baseLayout(temp.length?`Air temperature (${tempUnit})`:"Humidity (%)",extra),plotConfig());
+  return true;
+}
 function emphasizePrediction(){const plot=$("predictionPlot");if(!plot||!plot.data)return;plot.data.forEach((_,i)=>{const active=STATIONS[i]?.id===selectedStation;Plotly.restyle("predictionPlot",{"line.width":active?3.2:1.15,opacity:active?1:.62},[i]);});}
 async function redrawAll(){await loadPredictions();await loadObservations();setStatus(`Predictions loaded for ${$("startDate").value} through ${$("endDate").value}. Observations loaded for the last 72 hours.`);}
 function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
