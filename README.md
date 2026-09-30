@@ -23,3 +23,10 @@ NOAA data are requested in GMT internally. The site then displays those timestam
 ## GitHub Pages
 
 Upload `index.html`, `style.css`, `stations.js`, `app.js`, and this README to a repository. In GitHub choose **Settings → Pages → Deploy from a branch**, then select `main` and `/ (root)`.
+
+
+## v1.6
+- Added current numerical observation summary and tide trend.
+- Prediction data are padded and clipped to the exact selected display-time range.
+- Removed salinity, conductivity, and visibility observation requests/plots.
+- Renamed Air Temperature & Humidity panel to Air Temperature.

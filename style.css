@@ -33,3 +33,15 @@ select,input[type=date] { height:38px; border:1px solid #cbd4da; border-radius:6
 #predictionPlot { min-height:500px; }
 footer { width:min(1280px,calc(100% - 28px)); margin:0 auto 25px; color:var(--muted); font-size:.75rem; display:flex; justify-content:center; gap:7px; flex-wrap:wrap; }
 @media (max-width:700px) { .site-header{padding:18px;align-items:flex-start;flex-direction:column;} main{width:calc(100% - 18px);margin-top:9px;} .card{border-radius:7px;} .plot{min-height:350px;} #predictionPlot{min-height:430px;} select,input[type=date]{width:100%;} .control-row label,.unit-control{width:100%;} .primary{width:100%;} }
+
+.observation-summary-card .section-heading { margin-bottom: 2px; }
+.observation-summary {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+  gap:10px 18px;
+  padding:14px 18px 20px;
+}
+.summary-item { min-width:0; }
+.summary-label { font-size:12px; color:var(--muted); margin-bottom:3px; }
+.summary-value { font-size:26px; line-height:1.15; font-weight:650; color:var(--text); white-space:nowrap; }
+@media (max-width:700px) { .summary-value { font-size:22px; } }
