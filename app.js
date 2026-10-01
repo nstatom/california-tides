@@ -259,6 +259,15 @@ function updateObservationSummary(responses){
   const air=latestRecord(responses.air_temperature?.data||[]);
   const humidity=latestRecord(responses.humidity?.data||[]);
   if(water)items.push(["Water Level",`${water.y.toFixed(2)} ${units==="english"?"ft":"m"}`]);
+    // Tide trend is based on the last two valid water-level observations.
+  const wl=(responses.water_level?.data||[]).map(r=>({x:parseNoaaTime(r.t),y:Number(r.v)})).filter(p=>p.x&&!Number.isNaN(p.y));
+  if(wl.length>=2){
+    const a=wl[wl.length-2],b=wl[wl.length-1],dt=(b.x-a.x)/60000;
+    const rate=dt>0?(b.y-a.y)/dt:0;
+    const threshold=units==="english"?0.002:0.0006;
+    const trend=Math.abs(rate)<threshold?"Steady":rate>0?"Rising":"Falling";
+    items.push(["Tide Trend",trend]);
+  }
   if(waterTemp)items.push(["Water Temperature",`${waterTemp.y.toFixed(1)} ${units==="english"?"°F":"°C"}`]);
   if(wind){
     const speed=Number(wind.s),gust=Number(wind.g),dir=Number(wind.d);
@@ -268,15 +277,6 @@ function updateObservationSummary(responses){
   }
   if(air)items.push(["Air Temperature",`${air.y.toFixed(1)} ${units==="english"?"°F":"°C"}`]);
   if(humidity)items.push(["Humidity",`${humidity.y.toFixed(0)} %`]);
-  // Tide trend is based on the last two valid water-level observations.
-  const wl=(responses.water_level?.data||[]).map(r=>({x:parseNoaaTime(r.t),y:Number(r.v)})).filter(p=>p.x&&!Number.isNaN(p.y));
-  if(wl.length>=2){
-    const a=wl[wl.length-2],b=wl[wl.length-1],dt=(b.x-a.x)/60000;
-    const rate=dt>0?(b.y-a.y)/dt:0;
-    const threshold=units==="english"?0.002:0.0006;
-    const trend=Math.abs(rate)<threshold?"Steady":rate>0?"Rising":"Falling";
-    items.push(["Tide Trend",trend]);
-  }
   el.innerHTML=items.map(([label,value])=>`<div class="summary-item"><div class="summary-label">${label}</div><div class="summary-value">${value}</div></div>`).join("");
   if(card)card.style.display=items.length?"":"none";
   el.style.display=items.length?"grid":"none";
